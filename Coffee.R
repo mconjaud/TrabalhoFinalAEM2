@@ -17,6 +17,12 @@ library(ggrepel)
 library(factoextra)
 library(countrycode)
 library(dplyr)
+library(tidymodels)
+library(tidyverse)
+library(ISLR)
+library(vip)
+library(doParallel)
+library(skimr)
 
 
 #### TRAZENDO A BASE PARA PREDIÇÃO 
@@ -129,19 +135,131 @@ coffee$continent <-
 
 view(coffee)
 
+#Removendo a coluna unit_of_measurement (não precisaremos dela)
+coffee <- subset(coffee, select = -c(unit_of_measurement))
+
 
 # não entendo a inclusão de "idade"
 
 # Adding a new column called "Age"
 df <- mutate(df, Age = c(25, 30, 22, 28, 35))
 
+# criando um dataset somente com os dados de qualidade (para comparação) 
+# assim teremos o dataset coffee (com as colunas selecionadas) e coffee_quality (como somente as colunas de qualidade)
+
+coffee_quality <- subset(coffee, select = c(total_cup_points,aroma,flavor,
+                                          aftertaste,acidity,body,balance,
+                                          uniformity,clean_cup,sweetness,
+                                          cupper_points))
+
 
 
 # Dados -------------------------------------------------------------------
 
+#separando em training e test (coffee)
 set.seed(123)
 split <- initial_split(coffee, prop = 0.7)
 training <- training(split)
 test <- testing(split)
 View(training)
 View(test)
+
+#separando em training e test (coffee_quality)
+
+split_quality <- initial_split(coffee_quality, prop = 0.7)
+training_quality <- training(split_quality)
+test_quality <- testing(split_quality)
+View(training_quality)
+View(test_quality)
+
+
+#Receita-------------------------------------------------------------------
+
+#receita coffee
+receita <- recipe(total_cup_points ~ ., data = training) %>% 
+  step_normalize(all_numeric(), -all_outcomes()) %>%
+  step_dummy(all_nominal(), -all_outcomes()) 
+
+#receita coffee_quality
+receita_quality <- recipe(total_cup_points ~ ., data = training_quality) %>% 
+  step_normalize(all_numeric(), -all_outcomes()) %>%
+  step_dummy(all_nominal(), -all_outcomes()) 
+
+#Prepara receita
+
+(receita_prep <- prep(receita))
+
+training_proc <- bake(receita_prep, new_data = NULL)
+test_proc <- bake(receita_prep, new_data = test)
+
+(receita_prep_quality <- prep(receita_quality))
+
+training_proc_quality <- bake(receita_prep_quality, new_data = NULL)
+test_proc_quality <- bake(receita_prep_quality, new_data = test_quality,)
+
+# Tidymodels: Regressão Linear
+
+lm <- linear_reg() %>% set_engine("lm") 
+lm_fit <- linear_reg() %>% 
+  set_engine("lm") %>%
+  fit(total_cup_points ~ ., training_proc)
+
+fitted<- lm_fit %>% 
+  predict(new_data = test_proc) %>% 
+  mutate(observado = test_proc$total_cup_points, 
+         modelo = "Regressao Linear")
+
+head(fitted)
+
+lm_quality <- linear_reg() %>% set_engine("lm") 
+lm_fit_quality <- linear_reg() %>% 
+  set_engine("lm") %>%
+  fit(total_cup_points ~ ., training_proc_quality)
+
+fitted_quality<- lm_fit_quality %>% 
+  predict(new_data = test_proc_quality) %>% 
+  mutate(observado = test_proc_quality$total_cup_points, 
+         modelo = "Regressao Linear Quality")
+
+fitted <- fitted %>% 
+  bind_rows(fitted_quality)
+
+head(fitted_quality)
+
+
+# Tidymodels: XGBoost
+
+boost <- boost_tree(trees = tune(), min_n = tune(), 
+                    tree_depth = tune(), learn_rate = tune()) %>% 
+  set_engine("xgboost") %>% 
+  set_mode("regression")
+
+set.seed(123)
+cv_split <- vfold_cv(training, v = 5)
+registerDoParallel()
+
+boost_grid <- tune_grid(boost, 
+                        receita, 
+                        resamples = cv_split, 
+                        grid = 30, 
+                        metrics = metric_set(rmse, mae))
+
+best <- boost_grid %>% 
+  select_best("rmse")
+
+boost_fit <- finalize_model(boost, parameters = best) %>% 
+  fit(total_cup_points ~ ., training_proc)
+
+fitted_bst <- boost_fit %>% 
+  predict(new_data = test_proc) %>% 
+  mutate(observado = test_proc$total_cup_points, 
+         modelo = "XGBoost")
+
+fitted <- fitted %>% 
+  bind_rows(fitted_bst)
+
+fitted %>% 
+  group_by(modelo) %>% 
+  metrics(truth = observado, estimate = .pred) 
+
+mean(coffee$total_cup_points)

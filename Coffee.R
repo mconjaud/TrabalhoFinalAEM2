@@ -29,7 +29,7 @@ library(skimr)
 
 # Upload do Data Frame
 
-df <- read.csv("https://raw.githubusercontent.com/mconjaud/TrabalhoFinalAEM2/main/coffee_ratings.csv")
+df <- read.csv("https://raw.githubusercontent.com/mconjaud/TrabalhoFinalAEM2/main/Estatistica/coffee_ratings.csv")
 
 
 #### ANALIZANDO A BASE ############
@@ -57,8 +57,11 @@ print(grafico)
 
 #### TRATANDO A BASE ANTES DE APLICAR MODELOS ############
 
+# Removendo as linhas com missing values da coluna country_of_origin, pois essa linha tem pouca informação
 
-# Removendo as variáveis que não serão utilizadas
+df <- df[complete.cases(df$country_of_origin), ]
+
+# Removendo as variáveis que não serão utilizadas para as duas análises (supervisionada e não supervisionada)
 coffee <- subset (df, 
                   select = -c(owner
                               ,farm_name
@@ -97,62 +100,136 @@ unique(coffee$color)
 coffee <- coffee %>%
   mutate(color = ifelse(is.na(color), "Green", color))
 
+#---------------------------------------------------------------------
+#Deixei comentado os códigos abaixo, pois acho que teremos que converter mesmo de pés para metros
 
 # Padronizar "unit_of_measurement" em metros
-unique(coffee$unit_of_measurement)
-view(coffee$unit_of_measurement)
+#unique(coffee$unit_of_measurement)
+#view(coffee$unit_of_measurement)
 
-coffee <- coffee %>%
-  mutate(unit_of_measurement = 
-           ifelse(unit_of_measurement == "ft", "m", unit_of_measurement))
+#coffee <- coffee %>%
+#  mutate(unit_of_measurement = 
+#           ifelse(unit_of_measurement == "ft", "m", unit_of_measurement))
+#---------------------------------------------------------------------
 
+#Converte a coluna altitude_mean_meters de pés para metros
+coffee<- coffee %>%
+  mutate(altitude_mean_meters = ifelse(unit_of_measurement == "ft", altitude_mean_meters * 0.3048, altitude_mean_meters))
 
-# Preenchimento dos missings com a média de acordo com o país
-unique(coffee$country_of_origin)
+# há problema de qualidade dos dados, pois há medidas acima dos 10000 (mais alto que o Everest).
+#Assim, vamos dividir esses valores por 100 (valores acima dos 100.000) e por 10 (acima dos 5000), nesse sequência.
+coffee<- coffee %>%
+  mutate(altitude_mean_meters = ifelse(altitude_mean_meters > 100000, altitude_mean_meters/100, altitude_mean_meters))
+
+coffee<- coffee %>%
+  mutate(altitude_mean_meters = ifelse(altitude_mean_meters > 5000, altitude_mean_meters/10, altitude_mean_meters))
+
+# Preenchimento dos missings da coluna altitude_mean_meters pela média por país
 
 coffee <- coffee %>%
   group_by(country_of_origin) %>%
   mutate(altitude_mean_meters = ifelse(is.na(altitude_mean_meters),
                                        mean(altitude_mean_meters, na.rm = TRUE),
                                        altitude_mean_meters))
+#---------------------------------------------------------------------
+#Deixei comentado os códigos abaixo, pois substitui os missing values da coluna variety pela moda por país
+# substituindo missing values da 
+# Trocando "NA" por "other" em variety
+#coffee$variety_index <- match(df$variety, unique(df$variety)) # criando indice
+#coffee$variety <- ifelse(is.na(coffee$variety), "Other", coffee$variety)
 
-# Trocando "NA" por "other" 
-coffee$variety_index <- match(df$variety, unique(df$variety)) # criando indice
-coffee$variety <- ifelse(is.na(coffee$variety), "Other", coffee$variety)
+#quantidade_other <- table(coffee$variety)["Other"] #336 vezes
 
-quantidade_other <- table(coffee$variety)["Other"] #336 vezes
+#---------------------------------------------------------------------
 
+
+# Substitui os valores ausentes em quakes pela moda
+coffee$quakers <- ifelse(is.na(coffee$quakers),
+                         names(sort(-table(coffee$quakers)))[1], #calcula a moda
+                         coffee$quakers)
+
+#Tratamento dos missing values da coluna variety': vamos substituir pelo valor mais frequente por país
+# A Costa do Marfim, Equador, Mauricios e Papua Nova Guine só possuem um café avaliado e não possui valores de variety.
+#Assim, vamos usar a moda da coluna para esses países
+
+coffee$variety <- ifelse(coffee$country_of_origin == "Cote d?Ivoire" |
+                           coffee$country_of_origin == "Ecuador" |
+                           coffee$country_of_origin == "Mauritius"|
+                           coffee$country_of_origin == "Papua New Guinea",
+                         names(sort(-table(coffee$variety)))[1], #calcula a moda
+                         coffee$variety)
+
+# Cria uma tabela com a moda de variety por country_of_origin
+moda_por_regiao <- coffee %>%
+  group_by(country_of_origin) %>%
+  summarise(moda_variety = names(sort(-table(variety)))[1])
+
+moda_por_regiao <- na.omit(moda_por_regiao)
+
+# Substitui os valores ausentes pelo valor mais frequente na região
+coffee <- coffee %>%
+  group_by(country_of_origin) %>%
+  mutate(variety = ifelse(is.na(variety), moda_por_regiao$moda_variety[match(country_of_origin, moda_por_regiao$country_of_origin)], variety))
+
+
+sum(is.na(coffee$variety))
+
+#---------------------------------------------------------------------
 
 ## não achei a forma de trocar pela mediada ... ainda buscando :(
+## Comentário Flávio: resolvi acima
 
 
 
 # Criando a coluna continentes de acordo com o nome do country
+## Comentário Flávio: precisamos da uma coluna chamada continente? Fiquei na dúvida
 coffee$continent <-
   countrycode(sourcevar = coffee$country_of_origin, 
               origin = "country.name", destination = "continent")
-
+#---------------------------------------------------------------------
 
 view(coffee)
 
 #Removendo a coluna unit_of_measurement (não precisaremos dela)
 coffee <- subset(coffee, select = -c(unit_of_measurement))
 
-
+#---------------------------------------------------------------------
 # não entendo a inclusão de "idade"
+## Comentário Flávio: acho que não faz sentido também. Aí deixei comentado.
 
 # Adding a new column called "Age"
-df <- mutate(df, Age = c(25, 30, 22, 28, 35))
+#df <- mutate(df, Age = c(25, 30, 22, 28, 35))
+#---------------------------------------------------------------------
 
-# criando um dataset somente com os dados de qualidade (para comparação) 
-# assim teremos o dataset coffee (com as colunas selecionadas) e coffee_quality (como somente as colunas de qualidade)
 
-coffee_quality <- subset(coffee, select = c(total_cup_points,aroma,flavor,
+## Criar a coluna chamada Grade com a classificação dos cafés
+## Critério:
+## < 70 - Ruim (será 0)
+## 70>= e < 80 - Bom (será 1)
+## 80>= e < 85 - Muito Bom (será 2)
+## 85 >= - Excelente (será 3)
+
+coffee$grade <- cut(coffee$total_cup_points,
+                                    breaks = c(-Inf, 70, 80, 85, Inf),
+                                    labels = c(0, 1, 2, 3),
+                                    right = FALSE)
+
+
+# Vamos criar agora dois datasets:
+# um para análise supervisionada (SEMas colunas de qualidade) e 
+# outro para análise não supervisionada (COM as colunas de qualidade)
+# O objetivo do primeiro é criar modelos para estimar a classificação do café SEM os dados de qualidade
+# Para o segundo é clusterizar os cafés a partir da qualidade dos mesmos
+
+coffee_grade <- subset(coffee, select = -c(aroma,flavor,
                                           aftertaste,acidity,body,balance,
                                           uniformity,clean_cup,sweetness,
                                           cupper_points))
 
-
+coffee_cluster <- subset(coffee, select = c(total_cup_points,aroma,flavor,
+                                            aftertaste,acidity,body,balance,
+                                            uniformity,clean_cup,sweetness,
+                                            cupper_points))
 
 # Dados -------------------------------------------------------------------
 
@@ -263,3 +340,7 @@ fitted %>%
   metrics(truth = observado, estimate = .pred) 
 
 mean(coffee$total_cup_points)
+
+lm_fit_quality
+
+min(coffee$total_cup_points)

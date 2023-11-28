@@ -259,10 +259,13 @@ coffee_grade <- subset(coffee, select = -c(total_cup_points,aroma,flavor,
                                           uniformity,clean_cup,sweetness,
                                           cupper_points))
 
+<<<<<<< Updated upstream
 view(coffee_grade)
 
 # Coffee_grade podemos retirar a variavel "total_cup_points", certo?
 
+=======
+>>>>>>> Stashed changes
 coffee_cluster <- subset(coffee, select = c(aroma,flavor,
                                             aftertaste,acidity,body,balance,
                                             uniformity,clean_cup,sweetness,
@@ -283,12 +286,19 @@ test <- testing(split)
 View(training)
 View(test)
 
+<<<<<<< Updated upstream
 
 
 
 #Receita-------------------------------------------------------------------
 
 #receita coffee_grade
+=======
+
+#Receita-------------------------------------------------------------------
+
+#receita coffee
+>>>>>>> Stashed changes
 receita <- recipe(grade ~ ., data = training) %>% 
   step_normalize(all_numeric(), -all_outcomes()) %>%
   step_dummy(all_nominal(), -all_outcomes()) 
@@ -301,6 +311,7 @@ receita <- recipe(grade ~ ., data = training) %>%
 training_proc <- bake(receita_prep, new_data = NULL)
 test_proc <- bake(receita_prep, new_data = test)
 
+<<<<<<< Updated upstream
 # Tidymodels: Regressão Multinomial
 
 fit_mr <- multinom_reg(penalty = NULL, mixture = NULL) %>% # define um modelo de regressao Multinomial e define parâmetros nulos para ter regularização
@@ -316,6 +327,24 @@ fitted <- fit_mr %>%
 
 head(fitted)
 
+=======
+
+# Tidymodels: Regressão Multinominal
+fit_mng <- multinom_reg() %>% # define um modelo de regressao multinominal
+  set_engine("glmnet") %>% # define a engine do modelo
+  set_mode("classification") %>% # define que é problema de classificacao
+  fit(grade ~ ., training_proc)
+
+
+fitted <- fit_mng %>% 
+  predict(new_data = test_proc) %>% 
+  mutate(observado = test_proc$total_cup_points, 
+         modelo = "Regressao Multinominal")
+
+head(fitted)
+
+
+>>>>>>> Stashed changes
 
 
 # Tidymodels: XGBoost

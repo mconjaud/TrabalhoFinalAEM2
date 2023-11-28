@@ -23,6 +23,7 @@ library(ISLR)
 library(vip)
 library(doParallel)
 library(skimr)
+library(corrplot)
 
 
 #### TRAZENDO A BASE PARA PREDIÇÃO 
@@ -39,20 +40,17 @@ str(df)  # Tipo da variavel
 skim(df) # % de missings 
 
 
-# Calculando a proporção de valores missing por variável
-prop_missing <- df %>%
-  summarise_all(~ mean(is.na(.))) %>%
-  gather() %>%
-  arrange(desc(value))
+## troquei o gráfico por um mais 'bonito'
 
+# Gráfico com o % de variáveis NA
+colunas_na <- colSums(is.na(df))
+info_na <- colunas_na[colunas_na > 0] # 4 colunas com NA
+porcent_NA <- info_na / nrow(df) * 100
 
-grafico <- ggplot(prop_missing, aes(x = reorder(key, -value), y = value)) +
-  geom_bar(stat = "identity", fill = "skyblue") +
-  coord_flip() +  # Rotaciona as barras para torná-las horizontais
-  labs(x = "Variável", y = "% de Valores missing", 
-       title = "% de Valores missing por Variável")
+barplot(porcent_NA, main = "Porcentagem de NA por Coluna", 
+        ylab = "Porcentagem de NA", xlab = "Colunas",
+        col = "blue", las = 2)  # las = 2 para rotacionar os rótulos do eixo x
 
-print(grafico)
 
 
 #### TRATANDO A BASE ANTES DE APLICAR MODELOS ############
@@ -125,7 +123,6 @@ coffee<- coffee %>%
   mutate(altitude_mean_meters = ifelse(altitude_mean_meters > 5000, altitude_mean_meters/10, altitude_mean_meters))
 
 # Preenchimento dos missings da coluna altitude_mean_meters pela média por país
-
 coffee <- coffee %>%
   group_by(country_of_origin) %>%
   mutate(altitude_mean_meters = ifelse(is.na(altitude_mean_meters),
@@ -141,7 +138,6 @@ coffee <- coffee %>%
 #quantidade_other <- table(coffee$variety)["Other"] #336 vezes
 
 #---------------------------------------------------------------------
-
 
 # Substitui os valores ausentes em quakes pela moda
 coffee$quakers <- ifelse(is.na(coffee$quakers),
@@ -178,14 +174,18 @@ sum(is.na(coffee$variety))
 
 ## não achei a forma de trocar pela mediada ... ainda buscando :(
 ## Comentário Flávio: resolvi acima
+### S2
 
 
 
 # Criando a coluna continentes de acordo com o nome do country
 ## Comentário Flávio: precisamos da uma coluna chamada continente? Fiquei na dúvida
-coffee$continent <-
-  countrycode(sourcevar = coffee$country_of_origin, 
-              origin = "country.name", destination = "continent")
+### na ultima versão que eu fiz eu havia retirado, realmente não agrega, vou comentar 
+
+#coffee$continent <-
+#  countrycode(sourcevar = coffee$country_of_origin, 
+#              origin = "country.name", destination = "continent")
+
 #---------------------------------------------------------------------
 
 view(coffee)
@@ -215,21 +215,59 @@ coffee$grade <- cut(coffee$total_cup_points,
                                     right = FALSE)
 
 
+# Proporção de faixas + Colinearidade ----------------------------------------------------
+
+####### Propoção
+
+# Proporção de café por faixa de score
+contagem_faixas <- table(coffee$grade)
+
+barplot(prop.table(contagem_faixas) * 100, main = "Porcentagem de Faixa de score",
+        xlab = "Faixa de score", ylab = "Porcentagem", col = "green")
+
+####### Verificando NA
+
+# % de variáveis NA após tratativa da base
+colunas_na <- colSums(is.na(coffee))
+info_na <- colunas_na[colunas_na > 0] # 4 colunas com NA
+porcent_NA <- info_na / nrow(coffee) * 100
+
+####### Analise de Colinearidade 
+
+# Calculando a matriz de correlação
+dados <- coffee
+colunas_nao_numericas <- sapply(dados, class) != "numeric"
+dados_numericos <- dados[, !colunas_nao_numericas]
+matrix_de_correlacao <- cor(dados_numericos)
+
+options(repr.plot.width = 32, repr.plot.height = 32) 
+corrplot(matrix_de_correlacao, method = "color", type = "upper", tl.col = "black", tl.srt = 50)
+
+
+
+#-----------------------------------------------------------------------------
+
 # Vamos criar agora dois datasets:
 # um para análise supervisionada (SEMas colunas de qualidade) e 
 # outro para análise não supervisionada (COM as colunas de qualidade)
 # O objetivo do primeiro é criar modelos para estimar a classificação do café SEM os dados de qualidade
 # Para o segundo é clusterizar os cafés a partir da qualidade dos mesmos
 
-coffee_grade <- subset(coffee, select = -c(aroma,flavor,
+coffee_grade <- subset(coffee, select = -c(total_cup_points,aroma,flavor,
                                           aftertaste,acidity,body,balance,
                                           uniformity,clean_cup,sweetness,
                                           cupper_points))
+
+view(coffee_grade)
+
+# Coffee_grade podemos retirar a variavel "total_cup_points", certo?
 
 coffee_cluster <- subset(coffee, select = c(total_cup_points,aroma,flavor,
                                             aftertaste,acidity,body,balance,
                                             uniformity,clean_cup,sweetness,
                                             cupper_points))
+view(coffee_grade)
+
 
 # Dados -------------------------------------------------------------------
 

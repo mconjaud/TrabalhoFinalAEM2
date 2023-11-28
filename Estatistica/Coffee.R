@@ -24,7 +24,7 @@ library(vip)
 library(doParallel)
 library(skimr)
 library(corrplot)
-
+library(doParallel)
 
 #### TRAZENDO A BASE PARA PREDIÇÃO 
 
@@ -168,8 +168,6 @@ coffee <- coffee %>%
   mutate(variety = ifelse(is.na(variety), moda_por_regiao$moda_variety[match(country_of_origin, moda_por_regiao$country_of_origin)], variety))
 
 
-sum(is.na(coffee$variety))
-
 #---------------------------------------------------------------------
 
 ## não achei a forma de trocar pela mediada ... ainda buscando :(
@@ -244,11 +242,14 @@ options(repr.plot.width = 32, repr.plot.height = 32)
 corrplot(matrix_de_correlacao, method = "color", type = "upper", tl.col = "black", tl.srt = 50)
 
 
+#Confimando que não há missing values em todas as colunas de coffee
+
+colSums(is.na(coffee))
 
 #-----------------------------------------------------------------------------
 
 # Vamos criar agora dois datasets:
-# um para análise supervisionada (SEMas colunas de qualidade) e 
+# um para análise supervisionada (SEM as colunas de qualidade) e 
 # outro para análise não supervisionada (COM as colunas de qualidade)
 # O objetivo do primeiro é criar modelos para estimar a classificação do café SEM os dados de qualidade
 # Para o segundo é clusterizar os cafés a partir da qualidade dos mesmos
@@ -262,43 +263,36 @@ view(coffee_grade)
 
 # Coffee_grade podemos retirar a variavel "total_cup_points", certo?
 
-coffee_cluster <- subset(coffee, select = c(total_cup_points,aroma,flavor,
+coffee_cluster <- subset(coffee, select = c(aroma,flavor,
                                             aftertaste,acidity,body,balance,
                                             uniformity,clean_cup,sweetness,
                                             cupper_points))
-view(coffee_grade)
+view(coffee_cluster)
 
 
-# Dados -------------------------------------------------------------------
 
-#separando em training e test (coffee)
+# Análise Supervisionada -------------------------------------------------------------------
+
+# Tidymodel: Regressão Multinominal e XGBoost
+
+#separando em training e test (coffee_grade)
 set.seed(123)
-split <- initial_split(coffee, prop = 0.7)
+split <- initial_split(coffee_grade, prop = 0.7)
 training <- training(split)
 test <- testing(split)
 View(training)
 View(test)
 
-#separando em training e test (coffee_quality)
 
-split_quality <- initial_split(coffee_quality, prop = 0.7)
-training_quality <- training(split_quality)
-test_quality <- testing(split_quality)
-View(training_quality)
-View(test_quality)
 
 
 #Receita-------------------------------------------------------------------
 
-#receita coffee
-receita <- recipe(total_cup_points ~ ., data = training) %>% 
+#receita coffee_grade
+receita <- recipe(grade ~ ., data = training) %>% 
   step_normalize(all_numeric(), -all_outcomes()) %>%
   step_dummy(all_nominal(), -all_outcomes()) 
 
-#receita coffee_quality
-receita_quality <- recipe(total_cup_points ~ ., data = training_quality) %>% 
-  step_normalize(all_numeric(), -all_outcomes()) %>%
-  step_dummy(all_nominal(), -all_outcomes()) 
 
 #Prepara receita
 
@@ -307,39 +301,21 @@ receita_quality <- recipe(total_cup_points ~ ., data = training_quality) %>%
 training_proc <- bake(receita_prep, new_data = NULL)
 test_proc <- bake(receita_prep, new_data = test)
 
-(receita_prep_quality <- prep(receita_quality))
+# Tidymodels: Regressão Multinomial
 
-training_proc_quality <- bake(receita_prep_quality, new_data = NULL)
-test_proc_quality <- bake(receita_prep_quality, new_data = test_quality,)
+fit_mr <- multinom_reg(penalty = NULL, mixture = NULL) %>% # define um modelo de regressao Multinomial e define parâmetros nulos para ter regularização
+  set_engine("nnet") %>% # define a engine do modelo
+  set_mode("classification") %>% # define que é problema de classificacao
+  fit(grade ~ ., training_proc)
 
-# Tidymodels: Regressão Linear
+fitted <- fit_mr %>% 
+  predict(new_data = test_proc, type = "prob") %>% # realiza predicao para os dados de teste - não colocar type = "prob" caso não queira retornar as probabilidades de cada classificação (ao invés da classificação em si)
+  mutate(observado = test_proc$grade, # cria uma coluna com o valor observado de default
+         modelo = "Regressao Multinomial") # cria uma coluna para indicar qual o modelo ajustado
 
-lm <- linear_reg() %>% set_engine("lm") 
-lm_fit <- linear_reg() %>% 
-  set_engine("lm") %>%
-  fit(total_cup_points ~ ., training_proc)
-
-fitted<- lm_fit %>% 
-  predict(new_data = test_proc) %>% 
-  mutate(observado = test_proc$total_cup_points, 
-         modelo = "Regressao Linear")
 
 head(fitted)
 
-lm_quality <- linear_reg() %>% set_engine("lm") 
-lm_fit_quality <- linear_reg() %>% 
-  set_engine("lm") %>%
-  fit(total_cup_points ~ ., training_proc_quality)
-
-fitted_quality<- lm_fit_quality %>% 
-  predict(new_data = test_proc_quality) %>% 
-  mutate(observado = test_proc_quality$total_cup_points, 
-         modelo = "Regressao Linear Quality")
-
-fitted <- fitted %>% 
-  bind_rows(fitted_quality)
-
-head(fitted_quality)
 
 
 # Tidymodels: XGBoost
@@ -347,7 +323,7 @@ head(fitted_quality)
 boost <- boost_tree(trees = tune(), min_n = tune(), 
                     tree_depth = tune(), learn_rate = tune()) %>% 
   set_engine("xgboost") %>% 
-  set_mode("regression")
+  set_mode("classification")
 
 set.seed(123)
 cv_split <- vfold_cv(training, v = 5)
@@ -357,28 +333,26 @@ boost_grid <- tune_grid(boost,
                         receita, 
                         resamples = cv_split, 
                         grid = 30, 
-                        metrics = metric_set(rmse, mae))
+                        metrics = metric_set(roc_auc, accuracy))
 
 best <- boost_grid %>% 
-  select_best("rmse")
+  select_best("roc_auc") #seleciona o melhor ROC_AUC
 
 boost_fit <- finalize_model(boost, parameters = best) %>% 
-  fit(total_cup_points ~ ., training_proc)
+  fit(grade ~ ., training_proc)
 
 fitted_bst <- boost_fit %>% 
-  predict(new_data = test_proc) %>% 
-  mutate(observado = test_proc$total_cup_points, 
+  predict(new_data = test_proc, type = "prob") %>% 
+  mutate(observado = test_proc$grade, 
          modelo = "XGBoost")
 
 fitted <- fitted %>% 
   bind_rows(fitted_bst)
 
+# Verificar a melhor forma de avaliação dos modelos
 fitted %>% 
   group_by(modelo) %>% 
-  metrics(truth = observado, estimate = .pred) 
+  roc_auc(observado, .pred_No)
+#metrics(truth = observado, estimate = .pred_class)
 
-mean(coffee$total_cup_points)
-
-lm_fit_quality
-
-min(coffee$total_cup_points)
+summary(fitted)

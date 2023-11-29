@@ -225,10 +225,8 @@ barplot(prop.table(contagem_faixas) * 100, main = "Porcentagem de Faixa de score
 
 ####### Verificando NA
 
-# % de variáveis NA após tratativa da base
-colunas_na <- colSums(is.na(coffee))
-info_na <- colunas_na[colunas_na > 0] # 4 colunas com NA
-porcent_NA <- info_na / nrow(coffee) * 100
+# Número de NA após tratativa da base
+colSums(is.na(coffee))
 
 ####### Analise de Colinearidade 
 
@@ -244,7 +242,7 @@ corrplot(matrix_de_correlacao, method = "color", type = "upper", tl.col = "black
 
 #Confimando que não há missing values em todas as colunas de coffee
 
-colSums(is.na(coffee))
+
 
 #-----------------------------------------------------------------------------
 
@@ -259,13 +257,10 @@ coffee_grade <- subset(coffee, select = -c(total_cup_points,aroma,flavor,
                                           uniformity,clean_cup,sweetness,
                                           cupper_points))
 
-<<<<<<< Updated upstream
 view(coffee_grade)
 
 # Coffee_grade podemos retirar a variavel "total_cup_points", certo?
 
-=======
->>>>>>> Stashed changes
 coffee_cluster <- subset(coffee, select = c(aroma,flavor,
                                             aftertaste,acidity,body,balance,
                                             uniformity,clean_cup,sweetness,
@@ -286,22 +281,15 @@ test <- testing(split)
 View(training)
 View(test)
 
-<<<<<<< Updated upstream
 
 
 
 #Receita-------------------------------------------------------------------
 
 #receita coffee_grade
-=======
-
-#Receita-------------------------------------------------------------------
-
-#receita coffee
->>>>>>> Stashed changes
 receita <- recipe(grade ~ ., data = training) %>% 
   step_normalize(all_numeric(), -all_outcomes()) %>%
-  step_dummy(all_nominal(), -all_outcomes()) 
+  step_dummy(all_nominal(), -all_outcomes()) #transforma as variáveis categóricas em variáveis dummy
 
 
 #Prepara receita
@@ -311,7 +299,6 @@ receita <- recipe(grade ~ ., data = training) %>%
 training_proc <- bake(receita_prep, new_data = NULL)
 test_proc <- bake(receita_prep, new_data = test)
 
-<<<<<<< Updated upstream
 # Tidymodels: Regressão Multinomial
 
 fit_mr <- multinom_reg(penalty = NULL, mixture = NULL) %>% # define um modelo de regressao Multinomial e define parâmetros nulos para ter regularização
@@ -320,31 +307,13 @@ fit_mr <- multinom_reg(penalty = NULL, mixture = NULL) %>% # define um modelo de
   fit(grade ~ ., training_proc)
 
 fitted <- fit_mr %>% 
-  predict(new_data = test_proc, type = "prob") %>% # realiza predicao para os dados de teste - não colocar type = "prob" caso não queira retornar as probabilidades de cada classificação (ao invés da classificação em si)
+  predict(new_data = test_proc) %>% # realiza predicao para os dados de teste - não colocar type = "prob" caso não queira retornar as probabilidades de cada classificação (ao invés da classificação em si)
   mutate(observado = test_proc$grade, # cria uma coluna com o valor observado de default
          modelo = "Regressao Multinomial") # cria uma coluna para indicar qual o modelo ajustado
 
 
 head(fitted)
 
-=======
-
-# Tidymodels: Regressão Multinominal
-fit_mng <- multinom_reg() %>% # define um modelo de regressao multinominal
-  set_engine("glmnet") %>% # define a engine do modelo
-  set_mode("classification") %>% # define que é problema de classificacao
-  fit(grade ~ ., training_proc)
-
-
-fitted <- fit_mng %>% 
-  predict(new_data = test_proc) %>% 
-  mutate(observado = test_proc$total_cup_points, 
-         modelo = "Regressao Multinominal")
-
-head(fitted)
-
-
->>>>>>> Stashed changes
 
 
 # Tidymodels: XGBoost
@@ -365,23 +334,129 @@ boost_grid <- tune_grid(boost,
                         metrics = metric_set(roc_auc, accuracy))
 
 best <- boost_grid %>% 
-  select_best("roc_auc") #seleciona o melhor ROC_AUC
+  select_best("accuracy") #seleciona o melhor ROC_AUC
 
 boost_fit <- finalize_model(boost, parameters = best) %>% 
   fit(grade ~ ., training_proc)
 
 fitted_bst <- boost_fit %>% 
-  predict(new_data = test_proc, type = "prob") %>% 
+  predict(new_data = test_proc) %>% 
   mutate(observado = test_proc$grade, 
          modelo = "XGBoost")
 
 fitted <- fitted %>% 
   bind_rows(fitted_bst)
 
-# Verificar a melhor forma de avaliação dos modelos
+# Redes Neurais----------------------------------
+# Preparando os dados para a rede neural 
+
+#Transformando as variáveis preditoras de treinamento e teste em matriz
+x_train <- training_proc %>% 
+  select(-grade) %>% 
+  as.matrix()
+
+View(x_train)
+
+x_test <- test_proc %>% 
+  select(-grade) %>% 
+  as.matrix()
+
+x_train <- scale(x_train)
+
+x_test <- scale(x_test,
+               center = attr(x_train, "scaled:center"),
+               scale = attr(x_train, "scaled:scale"))
+
+# A variável resposta é só um vetor inteiro com valores variando de 0 a 9.
+#Para preparar esses dados para treinamento, codificamos os vetores
+#em matrizes de classe bin?ria usando a fun??o Keras to_categorical():
+y_train <- to_categorical(training_proc$grade)
+y_test <- to_categorical(test_proc$grade)
+
+
+net <- keras_model_sequential() %>% 
+  layer_dense(units = 64, 
+              activation = "relu", 
+              input_shape = ncol(x_train)) %>% 
+  #layer_dropout(rate = 0.1) %>% # regularizacao para evitar overfitting
+  layer_dense(units = 32, activation = "relu") %>% 
+  #layer_dropout(rate = 0.1) %>%  # regularizacao para evitar overfitting
+  layer_dense(units = 16, activation = "relu") %>% 
+  #layer_dropout(rate = 0.1) %>%  # regularizacao para evitar overfitting
+  layer_dense(units = 8, activation = "relu") %>% 
+  layer_dense(units = 4, activation = 'softmax')
+
+summary(net)
+
+# Compilando o modelo -----------------------------------------------------
+# to configure the learning process
+
+net <- compile(net,
+               loss = 'categorical_crossentropy', 
+               optimizer = "adam", #ver comentario abaixo
+               metrics = c("accuracy") #pode ser customizada
+)
+
+
+# Treinando o modelo ------------------------------------------------------
+
+history <- fit(net, x_train, y_train,
+               batch_size = 24, epochs = 30, # defaults: 32, 10
+               validation_split = 0.2)
+
+# batch_size: define o n?mero de amostras para trabalhar antes de atualizar o
+# par?metros internos do modelo.
+# epoch: define o n?mero de vezes que o algoritmo de aprendizado funcionar?
+# todo o conjunto de dados de treinamento (Uma ?poca significa que cada amostra no treinamento
+# conjunto de dados teve a oportunidade de atualizar os par?metros do modelo interno. ).
+
+# N?o h? regras m?gicas de como configurar esses par?metros. Voc? deve tentar diferente
+# valores e veja o que funciona melhor para o seu problema.
+
+history
+plot(history)
+
+
+# Avaliando o modelo ------------------------------------------------------
+
+# Predicao
+
+pred_net <- net %>% predict(x_test) %>% k_argmax()%>% k_get_value()
+
+#data.frame(y = test_proc$grade, y_hat = pred1)
+
+#mean(abs(test_proc$grade == as.numeric(pred1)))
+
+#Calcula a acurácia do modelo de rede neurais
+Metrics::accuracy(test_proc$grade, pred_net)
+
+# Cria dataframe com os valores observados e estimados do modelo de redes neurais
+fitted_net <- data.frame(.pred_class = factor(pred_net), observado = test_proc$grade, modelo = "Redes Neurais")
+
+fitted <- fitted %>% 
+  bind_rows(fitted_net)
+
+
+head(fitted)
+
+
+
+#compara as métricas dos 3 modelos
 fitted %>% 
   group_by(modelo) %>% 
-  roc_auc(observado, .pred_No)
-#metrics(truth = observado, estimate = .pred_class)
+  metrics(truth = observado, estimate = .pred_class)
 
-summary(fitted)
+
+#O valor de Kappa varia de -1 a 1, sendo interpretado da seguinte forma:
+  
+#Kappa próximo de 1: Indica uma concordância perfeita entre observadores ou métodos.
+#Kappa próximo de 0: Indica uma concordância igual àquela esperada ao acaso.
+#Kappa próximo de -1: Indica uma concordância inversa, o que geralmente não é considerado válido em muitos contextos.
+
+#A interpretação do valor de Kappa pode ser resumida da seguinte maneira:
+  
+#0.81-1.00: Concordância quase perfeita.
+#0.61-0.80: Concordância substancial.
+#0.41-0.60: Concordância moderada.
+#0.21-0.40: Concordância fraca.
+#0.00-0.20: Concordância mínima ou inexistente.

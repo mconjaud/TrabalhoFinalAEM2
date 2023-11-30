@@ -42,8 +42,8 @@ Para os modelos supervisionados, foi criada uma variável resposta a partir dess
 
 - Pontuação menor do que 70: Ruim (será considerado como 0)
 - Pontuação maior do que 70 e menor do que 80:  Bom (será considerado como 1)
-- Pontuação maior do que 85 e menor do que 85: Muito Bom (será considerado como 2)
-- Pontuação maior do que 85: Excelente (será considerado comoá 3)
+- Pontuação maior do que 80 e menor do que 85: Muito Bom (será considerado como 2)
+- Pontuação maior do que 85: Excelente (será considerado como 3)
 
 Essa critério segue o padrão dos principais institutos que avaliam cafés.
 
@@ -294,7 +294,7 @@ Agora, a etapa seguinte é criar os datasets de treinamento e teste:
 
 ```{r}
 set.seed(123)
-split <- initial_split(coffee_grade, prop = 0.7)
+split <- initial_split(coffee_grade, prop = 0.8, strata = grade)
 training <- training(split)
 test <- testing(split)
 ```

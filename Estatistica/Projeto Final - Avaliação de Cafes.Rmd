@@ -389,7 +389,7 @@ best <- boost_grid %>%
   select_best("accuracy")
 ```
 
-Por fim será aplicado o modelo de previsão nos dados de teste e estimando os dados de previsão, armazenando numa tabela chamada fitted:
+Por fim será aplicado o modelo de previsão nos dados de teste e estimado os dados de previsão, armazenando numa tabela chamada fitted:
 
 ```{r}
 boost_fit <- finalize_model(boost, parameters = best) %>% 
@@ -405,7 +405,91 @@ fitted <- fitted %>%
 
 ```
 
-POr último, os resultados finais dos modelos acima estimados com tidymodels estão abaixo:
+
+### Redes Neurais
+
+O último modelo a ser estimado é o de Rede Neurais. Inicialmente, vamos transformar as variáveis preditoras de treinamento e teste em matriz:
+
+```{r}
+x_train <- training_proc %>% 
+  select(-grade) %>% 
+  as.matrix()
+
+View(x_train)
+
+x_test <- test_proc %>% 
+  select(-grade) %>% 
+  as.matrix()
+
+x_train <- scale(x_train)
+
+x_test <- scale(x_test,
+               center = attr(x_train, "scaled:center"),
+               scale = attr(x_train, "scaled:scale"))
+```
+
+Em seguida, a variável respost será transformada em categórica:  
+
+```{r}
+y_train <- to_categorical(training_proc$grade)
+y_test <- to_categorical(test_proc$grade)
+```
+
+Abaixo foi criada a estrutura da rede desse modelo, com quatro camadas intermediárias e a última com 4 unidades (4 valores de variável resposta esperados):
+
+```{r}
+net <- keras_model_sequential() %>% 
+  layer_dense(units = 64, 
+              activation = "relu", 
+              input_shape = ncol(x_train)) %>% 
+  layer_dropout(rate = 0.1) %>% # regularizacao para evitar overfitting
+  layer_dense(units = 32, activation = "relu") %>% 
+  layer_dropout(rate = 0.1) %>%  # regularizacao para evitar overfitting
+  layer_dense(units = 16, activation = "relu") %>% 
+  layer_dropout(rate = 0.1) %>%  # regularizacao para evitar overfitting
+  layer_dense(units = 8, activation = "relu") %>% 
+  layer_dense(units = 4, activation = 'softmax')
+
+summary(net)
+```
+
+Compilando essa rede:
+
+```{r}
+net <- compile(net,
+               loss = 'categorical_crossentropy', 
+               optimizer = "adam", #ver comentario abaixo
+               metrics = c("accuracy") #pode ser customizada
+)
+```
+
+e treinando o modelo:
+
+```{r}
+history <- fit(net, x_train, y_train,
+               batch_size = 24, epochs = 30, # defaults: 32, 10
+               validation_split = 0.2)
+
+history
+plot(history)
+
+```
+
+Por último, vamos aplicar o modelo definido acima nos dados de teste e estimar os dados de previsão, armazenando numa tabela chamada fitted:
+
+```{r}
+pred_net <- net %>% predict(x_test) %>% k_argmax()%>% k_get_value()
+
+fitted_net <- data.frame(.pred_class = factor(pred_net), observado = test_proc$grade, modelo = "Redes Neurais")
+
+fitted <- fitted %>% 
+  bind_rows(fitted_net)
+```
+
+
+### Avaliação dos Modelos Supervisionados
+
+Por último, os resultados finais dos modelos acima estimados com tidymodels estão abaixo:
 
 ```{r}
 fitted %>% 

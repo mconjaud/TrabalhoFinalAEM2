@@ -27,6 +27,9 @@ library(vip)
 library(doParallel)
 library(skimr)
 library(corrplot)
+library(caret)
+
+
 ```
 
 ## Introdução
@@ -45,7 +48,7 @@ Para os modelos supervisionados, foi criada uma variável resposta a partir dess
 - Pontuação maior do que 80 e menor do que 85: Muito Bom (será considerado como 2)
 - Pontuação maior do que 85: Excelente (será considerado como 3)
 
-Essa critério segue o padrão dos principais institutos que avaliam cafés.
+Esse critério segue o padrão dos principais institutos que avaliam cafés.
 
 Para os modelos supervisionados, será aplicado o PCA e o K-means para clusterização e serão consideradas somente as variáveis de qualidade, conforme abaixo. O objetivo é criar grupos de cafés a partir das características avaliadas.
 
@@ -331,7 +334,6 @@ fit_mr <- multinom_reg(penalty = 1, mixture = NULL) %>% # define um modelo de re
   set_mode("classification") %>% 
   fit(grade ~ ., training_proc)
 
-
 ```
 
 Aplicando o modelo de previsão nos dados de teste e estimando os dados de previsão, armazenando os resultados do modelo numa tabela chamada fitted:
@@ -487,3 +489,97 @@ fitted %>%
   group_by(modelo) %>% 
   metrics(truth = observado, estimate = .pred_class)
 ```
+
+
+# Matriz de confusão para comparar modelos Supervisionados
+
+```{r}
+
+# Matriz do modelo Multinomial
+Conf_Matrix_Mult <- fitted %>%
+  conf_mat(truth = observado, estimate = .pred_class)
+
+Conf_Matrix_Mult
+
+
+# Matriz do modelo XGboost
+conf_matrix_xgb <- fitted_bst %>%
+  conf_mat(truth = observado, estimate = .pred_class)
+
+conf_matrix_xgb
+
+
+# Matriz do modelo Rede Neural
+conf_matrix_rn <- fitted_net %>%
+  conf_mat(truth = observado, estimate = .pred_class)
+
+
+conf_matrix_rn
+
+```
+
+
+## Análise Não Supervisionada
+
+
+```{r}
+
+####### APLICANDO O PCA 
+# PCA seleciona a qtd de variaveis que soma 80% da variancia
+
+# Data frame sem a variavel resposta
+
+view(coffee_cluster)
+
+# Ajustando data frame
+pca <- coffee_cluster %>%
+  select(is.numeric) %>% # variaveis numericas
+  prcomp(scale = TRUE, center = TRUE) # aplica PCA
+
+
+pca$rotation <- -pca$rotation # troca o sinal das cargas
+pca$x <- -pca$x # troca o sinal dos scores
+
+Phi <- pca$rotation # matriz de cargas
+head(Phi)
+
+Z <- pca$x # matriz de scores
+head(Z)
+
+# o grafico abaixo mostra o percentual explicado da variancia de cada componente
+fviz_eig(pca, addlabels = TRUE, ncp = 10) + 
+  labs(x = "Componente Principal",
+       y = "Percentual explicado da variância")
+
+# retorna o nome da primeira componente principal
+contribuicoes_primeira_componente <- abs(pca$rotation[, 1])
+
+contribuicoes_primeira_componente
+
+####### APLICANDO O KMEANS
+
+# Executando o método k-means para identificar o número ótimo de clusters entre as variaveis analisadas
+fviz_nbclust(coffee_cluster, kmeans, method = "silhouette")
+
+
+# Analise do numero de clusters
+set.seed(123)
+
+k <- 2:20
+tibble(k = k) %>% 
+  mutate(w = map_dbl(k, ~ kmeans(coffee_cluster, centers = .x,
+                                 nstart = 10)$tot.withinss)) %>% 
+  ggplot(aes(k, w)) + 
+  geom_point() + 
+  scale_x_continuous(breaks = k) +
+  geom_line()
+
+# especificar k com base no grafico de cotovelo acima
+set.seed(123)
+
+(descricao <- dados %>% 
+    mutate(cluster = factor(kmeans(coffee_cluster, centers = , nstart = 10)$cluster)))
+
+
+```
+

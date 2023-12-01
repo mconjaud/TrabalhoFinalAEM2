@@ -3,7 +3,8 @@
 # Dados: Coffee
 
 #### Bibliotecas Necessárias para aplicação dos modelos
-
+install.packages("caret")  # Pacote para avaliação de modelos
+library(caret)
 library(MASS)
 library(tidyverse)
 library(keras)
@@ -185,6 +186,7 @@ coffee$grade <- cut(coffee$total_cup_points,
                                     labels = c(0, 1, 2, 3),
                                     right = FALSE)
 
+coffee$type <- ifelse(coffee$total_cup_points > 80, 1, 0)
 
 # Proporção de faixas + Colinearidade ----------------------------------------------------
 
@@ -193,8 +195,13 @@ coffee$grade <- cut(coffee$total_cup_points,
 # Proporção de café por faixa de score
 contagem_faixas <- table(coffee$grade)
 
-barplot(prop.table(contagem_faixas) * 100, main = "Porcentagem de Faixa de score",
-        xlab = "Faixa de score", ylab = "Porcentagem", col = "green")
+proporcao <- text(x = barplot(prop.table(contagem_faixas) * 100, main = "Porcentagem de Faixa de score",
+                 xlab = "Faixa de score", ylab = "Porcentagem", col = "green"), 
+      labels = round(prop.table(contagem_faixas)* 100, 1), pos = 3)
+
+proporcao
+# Adicionar rótulos
+grafico
 
 ####### Analise de Colinearidade 
 
@@ -277,6 +284,7 @@ fitted <- fit_mr %>%
 
 head(fitted)
 
+matriz_confusao_mr <- confusionMatrix(fitted$.pred_class, fitted$observado)
 
 # Tidymodels: XGBoost
 
@@ -306,8 +314,13 @@ fitted_bst <- boost_fit %>%
   mutate(observado = test_proc$grade, 
          modelo = "XGBoost")
 
+matriz_confusao_bst <- confusionMatrix(fitted_bst$.pred_class, fitted_bst$observado)
+
 fitted <- fitted %>% 
   bind_rows(fitted_bst)
+
+
+
 
 # Redes Neurais----------------------------------
 # Preparando os dados para a rede neural 
@@ -398,6 +411,7 @@ fitted_net <- data.frame(.pred_class = factor(pred_net), observado = test_proc$g
 fitted <- fitted %>% 
   bind_rows(fitted_net)
 
+matriz_confusao_net <- confusionMatrix(fitted_net$.pred_class, fitted_net$observado)
 
 head(fitted)
 

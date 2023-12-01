@@ -27,6 +27,7 @@ library(vip)
 library(doParallel)
 library(skimr)
 library(corrplot)
+library(caret)
 ```
 
 ## Introdução
@@ -46,6 +47,8 @@ Para os modelos supervisionados, foi criada uma variável resposta a partir dess
 - Pontuação maior do que 85: Excelente (será considerado como 3)
 
 Essa critério segue o padrão dos principais institutos que avaliam cafés.
+
+Além disso, como forma de comparação com a abordagem multinomial, será criada uma variável resposta para classificar os cafés em dois tipos (bom e ruim) e será aplicado o modelo de regressão logística. Nesta variável resposta, os cafés com pontuação acima de 80 serão será definido como Very Good e os demais como Not Very Good.
 
 Para os modelos supervisionados, será aplicado o PCA e o K-means para clusterização e serão consideradas somente as variáveis de qualidade, conforme abaixo. O objetivo é criar grupos de cafés a partir das características avaliadas.
 
@@ -222,13 +225,19 @@ coffee <- subset(coffee, select = -c(unit_of_measurement))
 
 ### Variável Resposta dos Modelos Supervisionados
 
-Abaixo será criada a coluna com a varável resposta (grade), conforme definido acima:
+Abaixo será criada a coluna com a varável resposta (grade) para a abordagem multinomial, conforme definido acima:
 
 ```{r}
 coffee$grade <- cut(coffee$total_cup_points,
                                     breaks = c(-Inf, 70, 80, 85, Inf),
                                     labels = c(0, 1, 2, 3),
                                     right = FALSE)
+```
+
+E abaixo será criada a coluna com a varável resposta (type) para uso na regressão logística, conforme definido acima:
+
+```{r}
+coffee$type <- ifelse(coffee$total_cup_points >= 80, "Very_Good", "Not_Very_Good")
 ```
 
 
@@ -241,8 +250,11 @@ Abaixo, vamos plotar o gráfico para verificar a proporção de cafés por faixa
 ```{r}
 contagem_faixas <- table(coffee$grade)
 
-barplot(prop.table(contagem_faixas) * 100, main = "Porcentagem de Faixa de score",
-        xlab = "Faixa de score", ylab = "Porcentagem", col = "green")
+proporcao <- text(x = barplot(prop.table(contagem_faixas) * 100, main = "Porcentagem de Faixa de score",
+                 xlab = "Faixa de score", ylab = "Porcentagem", col = "green"), 
+      labels = round(prop.table(contagem_faixas)* 100, 1), pos = 3)
+
+proporcao
 ```
 
 #### Analise de Colinearidade 
@@ -267,23 +279,24 @@ Verifica-se que há alta correlação entre as variáveis de qualidade e a pontu
 Vamos criar dois datasets distintos, conforme definido acima:
 
 - Análise Supervionada: coffee_grade
-- Análise Supervionada: coffee_cluster
+- Análise Não Supervionada: coffee_cluster
+
 ```{r}
 coffee_grade <- subset(coffee, select = -c(total_cup_points,aroma,flavor,
                                           aftertaste,acidity,body,balance,
                                           uniformity,clean_cup,sweetness,
                                           cupper_points))
 
-  coffee_cluster <- subset(coffee, select = c(aroma,flavor,
+coffee_cluster <- subset(coffee, select = c(aroma,flavor,
                                             aftertaste,acidity,body,balance,
                                             uniformity,clean_cup,sweetness,
                                             cupper_points))
 ```
 
 
-## Análise Supervisionada
+## Análise Supervisionada (Multinomial)
 
-Nesse item serão construídos e analisados os modelos para prever os preços dos alugueis. São eles:
+Nesse item serão construídos e analisados os modelos para prever a variável grade. São eles:
 
 - Regressão Multinomial
 - XGBoost
@@ -316,17 +329,23 @@ Abaixo, vamos preparar a receita definida acima:
 
 Por fim, obtemos os dados de treinamento e teste processados: 
 ```{r}
-training_proc <- bake(receita_prep, new_data = NULL)
-test_proc <- bake(receita_prep, new_data = test)
+training_geral <- bake(receita_prep, new_data = NULL)
+test_geral <- bake(receita_prep, new_data = test)
 ```
 
+Vamos remover a coluna type dos dados de treinamento e teste, já que esta será só utilizada no modelo de regressão logísitica:
+
+```{r}
+training_proc <- subset(training_geral, select = -c(type))
+test_proc <- subset(test_geral, select = -c(type))
+```
 Vamos utilizar a receita preparada acima para aplicar os 4 modelos definidos inicialmente:
 
 ### Tidymodels: Regressão MUltinomial
 
-Primeiramente será estimado o modelo de regressão multinomial:
+Primeiramente será definido o modelo de regressão multinomial:
 ```{r}
-fit_mr <- multinom_reg(penalty = 1, mixture = NULL) %>% # define um modelo de regressao Multinomial: pepenalty = 1 lasso \ 2 Ridge
+fit_mr <- multinom_reg(penalty = NULL , mixture = NULL) %>% # define um modelo de regressao Multinomial: pepenalty = 1 lasso \ 2 Ridge
   set_engine("nnet") %>% 
   set_mode("classification") %>% 
   fit(grade ~ ., training_proc)
@@ -346,10 +365,16 @@ head(fitted)
 
 ```
 
+E por último vamos definir a matriz de confusão desse modelo de regressão multinomial:
+```{r}
+matriz_confusao_mr <- confusionMatrix(fitted$.pred_class, fitted$observado)
+```
+
+
 
 ### Tidymodels: XGBoost
 
-O último modelo a ser estimado é o XGBoost. Inicialmente é definir o modelo e quais hiperparâmetros serão otimizados (trees = número de árvores, min_n = valor mínimo por nó, tree_depth = profundidade da árvore e learn_rate = taxa de aprendizagem do modelo):
+O próximo modelo a ser estimado é o XGBoost. Inicialmente é definir o modelo e quais hiperparâmetros serão otimizados (trees = número de árvores, min_n = valor mínimo por nó, tree_depth = profundidade da árvore e learn_rate = taxa de aprendizagem do modelo):
 
 ```{r}
 boost <- boost_tree(trees = tune(), min_n = tune(), 
@@ -396,10 +421,15 @@ fitted <- fitted %>%
 
 ```
 
+E finalmente vamos definir a matriz de confusão desse modelo XGBoost:
+```{r}
+matriz_confusao_bst <- confusionMatrix(fitted_bst$.pred_class, fitted_bst$observado)
+```
+
 
 ### Redes Neurais
 
-O último modelo a ser estimado é o de Rede Neurais. Inicialmente, vamos transformar as variáveis preditoras de treinamento e teste em matriz:
+O último modelo a ser estimado é o de Redes Neurais. Inicialmente, vamos transformar as variáveis preditoras de treinamento e teste em matriz:
 
 ```{r}
 x_train <- training_proc %>% 
@@ -477,13 +507,65 @@ fitted <- fitted %>%
   bind_rows(fitted_net)
 ```
 
+E abaixo vamos definir a matriz de confusão desse modelo de redes neurais:
+```{r}
+matriz_confusao_net <- confusionMatrix(fitted_net$.pred_class, fitted_net$observado)
+```
+
+
+## Análise Supervisionada (Logística)
+
+Nesse item será estimado e analisado o modelo de regressão logística para prever a variável type. Inicialmente vamos remover a coluna grade dos dados de treinamento e teste, já que foi utilizada na abordagem multinomial:
+
+```{r}
+training_proc_type <- subset(training_geral, select = -c(grade))
+test_proc_type <- subset(test_geral, select = -c(grade))
+```
+
+A seguir será definido o modelo de regressão logística:
+```{r}
+fit_glm <- logistic_reg() %>% # define um modelo de regressao logistica
+  set_engine("glm") %>% # define a engine do modelo
+  set_mode("classification") %>% # define que e'  problema de classificacao
+  fit(type ~ ., training_proc_type)
+
+```
+
+Aplicando o modelo de previsão nos dados de teste e estimando os dados de previsão, armazenando os resultados do modelo numa tabela chamada fitted:
+
+```{r}
+fitted_glm <- fit_glm %>% 
+  predict(new_data = teste_proc, type = "prob") %>% # realiza predicao para os dados de teste
+  mutate(observado = teste_proc$default, # cria uma coluna com o valor observado de default
+         modelo = "logistica")
+
+head(fitted_glm)
+
+```
+
+E por último vamos definir a matriz de confusão desse modelo de regressão multinomial:
+```{r}
+matriz_confusao_glm <- confusionMatrix(fitted_glm$.pred_Very_Good, fitted_glm$observado)
+```
+
+
 
 ### Avaliação dos Modelos Supervisionados
 
-Por último, os resultados finais dos modelos acima estimados com tidymodels estão abaixo:
+Os resultados finais dos modelos acima estimados com tidymodels estão abaixo:
 
 ```{r}
 fitted %>% 
   group_by(modelo) %>% 
   metrics(truth = observado, estimate = .pred_class)
 ```
+
+E abaixo seguem os resultados das matrizes de confusão para cada modelo, bem como o gráfico da proporção dos tipos de café:
+```{r}
+proporcao
+matriz_confusao_mr
+matriz_confusao_bst
+matriz_confusao_net
+matriz_confusao_glm
+```
+

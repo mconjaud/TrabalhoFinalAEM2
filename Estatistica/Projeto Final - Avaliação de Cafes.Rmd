@@ -297,6 +297,7 @@ Agora, a etapa seguinte é criar os datasets de treinamento e teste:
 
 ```{r}
 set.seed(123)
+
 split <- initial_split(coffee_grade, prop = 0.8, strata = grade)
 training <- training(split)
 test <- testing(split)
@@ -364,6 +365,7 @@ Para esse processo de escolha dos hiperparâmetros, será utilizada a validaçã
 
 ```{r}
 set.seed(123)
+
 cv_split <- vfold_cv(training, v = 5)
 registerDoParallel()
 ```

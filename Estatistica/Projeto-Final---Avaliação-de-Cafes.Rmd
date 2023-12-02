@@ -293,6 +293,29 @@ coffee_cluster <- subset(coffee, select = c(aroma,flavor,
                                             cupper_points))
 ```
 
+<<<<<<< Updated upstream
+
+### Datasets para a Análise Supervisionada e Não Supervisionada.
+
+Vamos criar dois datasets distintos, conforme definido acima:
+
+- Análise Supervionada: coffee_grade
+- Análise Não Supervionada: coffee_cluster
+
+```{r}
+coffee_grade <- subset(coffee, select = -c(total_cup_points,aroma,flavor,
+                                          aftertaste,acidity,body,balance,
+                                          uniformity,clean_cup,sweetness,
+                                          cupper_points))
+
+coffee_cluster <- subset(coffee, select = c(aroma,flavor,
+                                            aftertaste,acidity,body,balance,
+                                            uniformity,clean_cup,sweetness,
+                                            cupper_points))
+```
+
+=======
+>>>>>>> Stashed changes
 Agora, a etapa seguinte é criar os datasets de treinamento e teste que ser"ao utilizados tanto para a abordagem multinomial quanto para a regressão logística:
 
 ```{r}

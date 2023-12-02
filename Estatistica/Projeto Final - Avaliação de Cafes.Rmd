@@ -46,7 +46,7 @@ Para os modelos supervisionados, foi criada uma variável resposta a partir dess
 - Pontuação maior do que 80 e menor do que 85: Muito Bom (será considerado como 2)
 - Pontuação maior do que 85: Excelente (será considerado como 3)
 
-Essa critério segue o padrão dos principais institutos que avaliam cafés.
+Esse critério segue o padrão dos principais institutos que avaliam cafés.
 
 Além disso, como forma de comparação com a abordagem multinomial, será criada uma variável resposta para classificar os cafés em dois tipos (bom e ruim) e será aplicado o modelo de regressão logística. Nesta variável resposta, os cafés com pontuação acima de 80 serão será definido como Very Good e os demais como Not Very Good.
 
@@ -307,6 +307,7 @@ Agora, a etapa seguinte é criar os datasets de treinamento e teste:
 
 ```{r}
 set.seed(123)
+
 split <- initial_split(coffee_grade, prop = 0.8, strata = grade)
 training <- training(split)
 test <- testing(split)
@@ -350,18 +351,17 @@ fit_mr <- multinom_reg(penalty = NULL , mixture = NULL) %>% # define um modelo d
   set_mode("classification") %>% 
   fit(grade ~ ., training_proc)
 
-
 ```
 
 Aplicando o modelo de previsão nos dados de teste e estimando os dados de previsão, armazenando os resultados do modelo numa tabela chamada fitted:
 
 ```{r}
-fitted <- fit_mr %>% 
+fitted_mt <- fit_mr %>% 
   predict(new_data = test_proc) %>% 
   mutate(observado = test_proc$grade, 
          modelo = "Regressao Multinomial") 
 
-head(fitted)
+head(fitted_mt)
 
 ```
 
@@ -387,6 +387,7 @@ Para esse processo de escolha dos hiperparâmetros, será utilizada a validaçã
 
 ```{r}
 set.seed(123)
+
 cv_split <- vfold_cv(training, v = 5)
 registerDoParallel()
 ```
@@ -505,6 +506,8 @@ fitted_net <- data.frame(.pred_class = factor(pred_net), observado = test_proc$g
 
 fitted <- fitted %>% 
   bind_rows(fitted_net)
+
+
 ```
 
 E abaixo vamos definir a matriz de confusão desse modelo de redes neurais:
@@ -517,9 +520,32 @@ matriz_confusao_net <- confusionMatrix(fitted_net$.pred_class, fitted_net$observ
 
 Nesse item será estimado e analisado o modelo de regressão logística para prever a variável type. Inicialmente vamos remover a coluna grade dos dados de treinamento e teste, já que foi utilizada na abordagem multinomial:
 
+Vamos remover a coluna type dos dados de treinamento e teste, já que esta será só utilizada no modelo de regressão logísitica:
+
 ```{r}
-training_proc_type <- subset(training_geral, select = -c(grade))
-test_proc_type <- subset(test_geral, select = -c(grade))
+training_type <- subset(training, select = -c(grade))
+test_type <- subset(test, select = -c(grade))
+```
+
+
+O primeiro passo é definir a receita, com a variavel resposta e os dados de treinamento, normalizando todas numericas exceto a variavel resposta e definindo variavel dummy para todas variaveis qualitativas.
+
+```{r}
+receita_type <- recipe(type ~ ., data = training_type) %>% 
+  step_normalize(all_numeric(), -all_outcomes()) %>%
+  step_dummy(all_nominal(), -all_outcomes())
+```
+
+Abaixo, vamos preparar a receita definida acima:
+
+```{r}
+(receita_type_prep <- prep(receita_type))
+```
+
+Por fim, obtemos os dados de treinamento e teste processados: 
+```{r}
+training_proc_type <- bake(receita_type_prep, new_data = NULL)
+test_proc_type <- bake(receita_type_prep, new_data = test_type)
 ```
 
 A seguir será definido o modelo de regressão logística:
@@ -549,7 +575,6 @@ matriz_confusao_glm <- confusionMatrix(fitted_glm$.pred_Very_Good, fitted_glm$ob
 ```
 
 
-
 ### Avaliação dos Modelos Supervisionados
 
 Os resultados finais dos modelos acima estimados com tidymodels estão abaixo:
@@ -567,5 +592,101 @@ matriz_confusao_mr
 matriz_confusao_bst
 matriz_confusao_net
 matriz_confusao_glm
+```
+
+Por ultimo, Matrizes de confusão para comparar o número de acertos:
+
+```{r}
+
+
+# Matriz do modelo Multinomial
+conf_matrix_test <- 
+  confusionMatrix(fitted_mt$observado, fitted_mt$.pred_class)
+
+conf_matrix_test
+
+# Matriz do modelo XGboost
+conf_matrix_xgb <- 
+  confusionMatrix(fitted_bst$observado, fitted_bst$.pred_class)
+
+conf_matrix_xgb
+
+
+# Matriz do modelo Rede Neural
+conf_mat_rn <- 
+  table(fitted_net$observado, fitted_net$.pred_class)
+
+conf_mat_rn
+
+# Deu erro, não consegui utilizar o mesmo modelo das anteriores para a RN
+#conf_matrix_rn <- 
+#  confusionMatrix(fitted_net$observado, fitted_net$.pred_class)
+
+#conf_matrix_rn
+
+
+```
+
+
+## Análise Não Supervisionada
+
+
+```{r}
+
+####### APLICANDO O PCA 
+# PCA seleciona a qtd de variaveis que soma 80% da variancia
+
+# Data frame sem a variavel resposta
+
+view(coffee_cluster)
+
+# Ajustando data frame
+pca <- coffee_cluster %>%
+  select(is.numeric) %>% # variaveis numericas
+  prcomp(scale = TRUE, center = TRUE) # aplica PCA
+
+
+pca$rotation <- -pca$rotation # troca o sinal das cargas
+pca$x <- -pca$x # troca o sinal dos scores
+
+Phi <- pca$rotation # matriz de cargas
+head(Phi)
+
+Z <- pca$x # matriz de scores
+head(Z)
+
+# o grafico abaixo mostra o percentual explicado da variancia de cada componente
+fviz_eig(pca, addlabels = TRUE, ncp = 10) + 
+  labs(x = "Componente Principal",
+       y = "Percentual explicado da variância")
+
+# retorna o nome da primeira componente principal
+contribuicoes_primeira_componente <- abs(pca$rotation[, 1])
+
+contribuicoes_primeira_componente
+
+####### APLICANDO O KMEANS
+
+# Executando o método k-means para identificar o número ótimo de clusters entre as variaveis analisadas
+fviz_nbclust(coffee_cluster, kmeans, method = "silhouette")
+
+
+# Analise do numero de clusters
+set.seed(123)
+
+k <- 2:20
+tibble(k = k) %>% 
+  mutate(w = map_dbl(k, ~ kmeans(coffee_cluster, centers = .x,
+                                 nstart = 10)$tot.withinss)) %>% 
+  ggplot(aes(k, w)) + 
+  geom_point() + 
+  scale_x_continuous(breaks = k) +
+  geom_line()
+
+# especificar k com base no grafico de cotovelo acima
+set.seed(123)
+
+(descricao <- dados %>% 
+    mutate(cluster = factor(kmeans(coffee_cluster, centers = , nstart = 10)$cluster)))
 ```
 

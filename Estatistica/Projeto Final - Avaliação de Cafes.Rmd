@@ -564,6 +564,9 @@ fitted_glm <- fit_glm %>%
 
 head(fitted_glm)
 
+fitted <- fitted %>% 
+  bind_rows(fitted_glm)
+
 ```
 
 E por último vamos definir a matriz de confusão desse modelo de regressão multinomial:
@@ -577,10 +580,6 @@ Os resultados finais dos modelos acima estimados com tidymodels e regressão log
 
 ```{r}
 fitted %>% 
-  group_by(modelo) %>% 
-  metrics(truth = observado, estimate = .pred_class)
-
-fitted_glm %>% 
   group_by(modelo) %>% 
   metrics(truth = observado, estimate = .pred_class)
 ```

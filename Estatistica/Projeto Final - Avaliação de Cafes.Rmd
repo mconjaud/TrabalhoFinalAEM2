@@ -340,12 +340,12 @@ fit_mr <- multinom_reg(penalty = 1, mixture = NULL) %>% # define um modelo de re
 Aplicando o modelo de previsão nos dados de teste e estimando os dados de previsão, armazenando os resultados do modelo numa tabela chamada fitted:
 
 ```{r}
-fitted <- fit_mr %>% 
+fitted_mt <- fit_mr %>% 
   predict(new_data = test_proc) %>% 
   mutate(observado = test_proc$grade, 
          modelo = "Regressao Multinomial") 
 
-head(fitted)
+head(fitted_mt)
 
 ```
 
@@ -479,12 +479,14 @@ fitted_net <- data.frame(.pred_class = factor(pred_net), observado = test_proc$g
 
 fitted <- fitted %>% 
   bind_rows(fitted_net)
+
+
 ```
 
 
-### Avaliação dos Modelos Supervisionados
+### Avaliação dos Modelos Supervisionados (Acuracia e Matriz de confusão)
 
-Por último, os resultados finais dos modelos acima estimados com tidymodels estão abaixo:
+Primeiro, vamos estimar a acuracia dentre os modelos:
 
 ```{r}
 fitted %>% 
@@ -493,30 +495,36 @@ fitted %>%
 ```
 
 
-# Matriz de confusão para comparar modelos Supervisionados
+Por ultimo, Matrizes de confusão para comparar o número de acertos:
 
 ```{r}
 
+
 # Matriz do modelo Multinomial
-Conf_Matrix_Mult <- fitted %>%
-  conf_mat(truth = observado, estimate = .pred_class)
+conf_matrix_test <- 
+  confusionMatrix(fitted_mt$observado, fitted_mt$.pred_class)
 
-Conf_Matrix_Mult
-
+conf_matrix_test
 
 # Matriz do modelo XGboost
-conf_matrix_xgb <- fitted_bst %>%
-  conf_mat(truth = observado, estimate = .pred_class)
+conf_matrix_xgb <- 
+  confusionMatrix(fitted_bst$observado, fitted_bst$.pred_class)
 
 conf_matrix_xgb
 
 
 # Matriz do modelo Rede Neural
-conf_matrix_rn <- fitted_net %>%
-  conf_mat(truth = observado, estimate = .pred_class)
+conf_mat_rn <- 
+  table(fitted_net$observado, fitted_net$.pred_class)
 
+conf_mat_rn
 
-conf_matrix_rn
+# Deu erro, não consegui utilizar o mesmo modelo das anteriores para a RN
+#conf_matrix_rn <- 
+#  confusionMatrix(fitted_net$observado, fitted_net$.pred_class)
+
+#conf_matrix_rn
+
 
 ```
 

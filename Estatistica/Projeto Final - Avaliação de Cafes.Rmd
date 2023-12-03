@@ -245,8 +245,7 @@ coffee$type <- ifelse(coffee$total_cup_points >= 80, "Very_Good", "Not_Very_Good
 
 
 ### Proporção de Cafés por Faixa de Pontuação (Grade) e Análise de Colinearidade
-
-### Propoção
+### Proporção (Grade) 
 
 Abaixo, vamos plotar o gráfico para verificar a proporção de cafés por faixa (grade):
 

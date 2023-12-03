@@ -8,13 +8,9 @@ output: html_document
 ```{r warning=FALSE, message=FALSE}
 knitr::opts_chunk$set(echo = TRUE, cache = TRUE)
 library(MASS)
-library(tidyverse)
-library(keras)
 library(rsample)
 library(keras)
 library(yardstick)
-library(skimr)
-library(dplyr)
 library(GGally)
 library(ggrepel)
 library(factoextra)
@@ -62,7 +58,6 @@ Para os modelos supervisionados, será aplicado o PCA e o K-means para clusteriz
 - Clean cup grade
 - Sweetness grade
 - Cupper Points
-
 
 
 ### Tratamento e Análise Exploratória dos Dados
@@ -592,15 +587,27 @@ fitted %>%
 ### Matrizes de confusão dos 4 modelos
 
 E abaixo seguem os resultados das matrizes de confusão para cada modelo, bem como o gráfico da proporção dos tipos de café:
+
+Observamos que a análise multinomial se saiu melhor nos acertos, porém, vale salientar que nenhum modelo foi capaz de ter acertos significativos nos grades 0,1 e 3.
+
+Isso se dá por:
+Quantidade de casos na base (0 = 0,6% / 1 = 13,3% / 3 = 7,9%)
+Com isso as respostas convergem para a grade 2 (Muito bom), mesmo utilizando o Strata na separação de treino de teste.
+
 ```{r}
-matriz_confusao_mr
-matriz_confusao_bst
-matriz_confusao_net
-matriz_confusao_glm
+matriz_confusao_bst$table # 1º em acertos
+matriz_confusao_mr$table #2º em acertos
+matriz_confusao_net$table #3º em acertos
+matriz_confusao_glm$table # Analise logística 
 ```
 
 ### Análise Não Supervisionada
 ## PCA
+
+# Gráfico de variância 
+
+Nesta etapa vamos rodar o PCA para verificar a quantidade de variáveis que somam >= 75% da variância.
+Neste caso, duas variáveis somam 74%, sendo a primeira 61%, isso já era esperado devido a alta colinearidade das informações, fato esse, explicado no gráfico acima.
 
 ```{r}
 
@@ -631,6 +638,16 @@ fviz_eig(pca, addlabels = TRUE, ncp = 10) +
        y = "Percentual explicado da variância")
 
 ```
+# Gráfico de variáveis novas explicando os cafés 
+
+Após encontrar as variáveis que explicam 75% da variância (PC1 e PC2), vamos nomeá-las e ver como os cafés se comportam de acordo com cada uma delas.
+
+Optamos por limitar os eixos X e Y do gráfico abaixo, retirando assim os outiers e melhor mostrando a dispersão. 
+
+É observado 3 divisões lineares no gráfico abaixo: 
+1 - Cafés que buscam doçura e sabor
+2 - Cafés que buscam maior intensidade de sabor
+3 - Café que buscam maior doçura 
 
 
 ```{r}
@@ -646,16 +663,21 @@ view(PC2) #sweetness
 # Gráfico para analise dos cafés nas duas variáveis criados pelo PCA
 fviz_pca_biplot(pca, repel = FALSE, xlab = "PC1 - Flavor", 
                 ylab = "PC2 - Sweetness", geom = "point", 
-                alpha.ind = 0.5)
+                alpha.ind = 0.5)  +
+  xlim(c(-10, 15)) +
+  ylim(c(-10, 10))
 
 ```
+
 ## Kmeans
+# Gráfico de número ótimo de clusters
 
 ```{r}
 # Executando o método k-means para identificar o número ótimo de clusters entre as variaveis analisadas
 fviz_nbclust(coffee_cluster, kmeans, method = "silhouette")
 
 ```
+# Gráfico de cotovelo
 
 ```{r}
 # Analise do Gráfico de cotovelo
@@ -671,6 +693,19 @@ tibble(k = k) %>%
   geom_line()
 
 ```
+# Gráfico dos 4 clusters da qualidade do café 
+
+Para finalizar a anlise não supervisionada, rodamos o Kmeans com 4 cluster (gráfico de cotovelo acima) para identificar como cada cafeicultor escolhe a qualidade da sua safra. 
+
+Optamos por limitar os eixos X e Y do gráfico abaixo, retirando assim os outliers e melhor mostrando a dispersão.
+
+Após limitar os eixos, fica mais fácil de identificar a linearidade dos grupos 2 e 4 e a dispersão dos grupos 1 e 3. 
+
+Os grupos 1 e 3 tentam buscar ambos os indicadores de qualidade (PC1 e PC2) para seu café. Enquanto os 2 e 4 são bem distintos em suas escolhas na hora do plantio.
+
+O grupo 1, por outro lado, busca se diferenciar ainda mais, sendo o grupo com mais outliers. 
+
+Essas escolhas poderiam, em uma análise futura, ser explicadas pela região, altitude e tipo do café. 
 
 
 ```{r}
@@ -687,7 +722,8 @@ descricao %>%
   labs(
     x = "PC1 - Flavor",
     y = "PC2 - Sweetness",
-    title = "Análise de Cluster da Qualidade de Café")
-
+    title = "Análise de Cluster da Qualidade de Café")  +
+  xlim(c(-10, 10)) +
+  ylim(c(-5, 10))
 
 ```

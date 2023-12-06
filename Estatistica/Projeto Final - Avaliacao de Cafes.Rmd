@@ -46,7 +46,7 @@ Esse critério segue o padrão dos principais institutos que avaliam cafés.
 
 Além disso, como forma de comparação com a abordagem multinomial, será criada uma variável resposta para classificar os cafés em dois tipos (bom e ruim) e será aplicado o modelo de regressão logística. Nesta variável resposta, os cafés com pontuação acima de 80 serão será definido como Very Good e os demais como Not Very Good.
 
-Para os modelos supervisionados, será aplicado o PCA e o K-means para clusterização e serão consideradas somente as variáveis de qualidade, conforme abaixo. O objetivo é criar grupos de cafés a partir das características avaliadas.
+Para os modelos Não supervisionados, será aplicado o PCA e o K-means para clusterização e serão consideradas somente as variáveis de qualidade, conforme abaixo. O objetivo é criar grupos de cafés a partir das características avaliadas.
 
 - Aroma grade
 - Flavor grade
@@ -595,10 +595,19 @@ Quantidade de casos na base (0 = 0,6% / 1 = 13,3% / 3 = 7,9%)
 Com isso as respostas convergem para a grade 2 (Muito bom), mesmo utilizando o Strata na separação de treino de teste.
 
 ```{r}
+# Matrizes que utilizam a variável Grade (4 saídas)
+
 matriz_confusao_bst$table # 1º em acertos
 matriz_confusao_mr$table #2º em acertos
 matriz_confusao_net$table #3º em acertos
+
+```
+```{r}
+
+# Matriz de confusão modelo Logistico 
+
 matriz_confusao_glm$table # Analise logística 
+
 ```
 
 ### Análise Não Supervisionada
@@ -714,6 +723,8 @@ set.seed(123)
 
 (descricao <- dados_pca %>% 
     mutate(cluster = factor(kmeans(coffee_cluster, centers = 4, nstart = 10)$cluster)))
+
+knitr::kable(head(descricao, 10))
 
 # Plotando grupos dentro das variáveis criadas
 descricao %>% 

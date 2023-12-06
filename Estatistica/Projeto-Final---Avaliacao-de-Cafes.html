@@ -413,10 +413,10 @@ será criada uma variável resposta para classificar os cafés em dois
 tipos (bom e ruim) e será aplicado o modelo de regressão logística.
 Nesta variável resposta, os cafés com pontuação acima de 80 serão será
 definido como Very Good e os demais como Not Very Good.</p>
-<p>Para os modelos supervisionados, será aplicado o PCA e o K-means para
-clusterização e serão consideradas somente as variáveis de qualidade,
-conforme abaixo. O objetivo é criar grupos de cafés a partir das
-características avaliadas.</p>
+<p>Para os modelos Não supervisionados, será aplicado o PCA e o K-means
+para clusterização e serão consideradas somente as variáveis de
+qualidade, conforme abaixo. O objetivo é criar grupos de cafés a partir
+das características avaliadas.</p>
 <ul>
 <li>Aroma grade</li>
 <li>Flavor grade</li>
@@ -1683,7 +1683,9 @@ significativos nos grades 0,1 e 3.</p>
 <p>Isso se dá por: Quantidade de casos na base (0 = 0,6% / 1 = 13,3% / 3
 = 7,9%) Com isso as respostas convergem para a grade 2 (Muito bom),
 mesmo utilizando o Strata na separação de treino de teste.</p>
-<pre class="r"><code>matriz_confusao_bst$table # 1º em acertos</code></pre>
+<pre class="r"><code># Matrizes que utilizam a variável Grade (4 saídas)
+
+matriz_confusao_bst$table # 1º em acertos</code></pre>
 <pre><code>##           Reference
 ## Prediction   0   1   2   3
 ##          0   0   0   0   0
@@ -1704,7 +1706,9 @@ mesmo utilizando o Strata na separação de treino de teste.</p>
 ##          1   0  10  19   0
 ##          2   1  28 188  13
 ##          3   0   0   7   3</code></pre>
-<pre class="r"><code>matriz_confusao_glm$table # Analise logística </code></pre>
+<pre class="r"><code># Matriz de confusão modelo Logistico 
+
+matriz_confusao_glm$table # Analise logística </code></pre>
 <pre><code>##                Reference
 ## Prediction      Not_Very_Good Very_Good
 ##   Not_Very_Good             2         6
@@ -5869,6 +5873,169 @@ set.seed(123)
 ## 1336       1
 ## 1337       1
 ## 1338       1</code></pre>
+<pre class="r"><code>knitr::kable(head(descricao, 10))</code></pre>
+<table>
+<colgroup>
+<col width="7%" />
+<col width="7%" />
+<col width="9%" />
+<col width="8%" />
+<col width="9%" />
+<col width="9%" />
+<col width="9%" />
+<col width="9%" />
+<col width="9%" />
+<col width="9%" />
+<col width="7%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="right">PC1</th>
+<th align="right">PC2</th>
+<th align="right">PC3</th>
+<th align="right">PC4</th>
+<th align="right">PC5</th>
+<th align="right">PC6</th>
+<th align="right">PC7</th>
+<th align="right">PC8</th>
+<th align="right">PC9</th>
+<th align="right">PC10</th>
+<th align="left">cluster</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="right">7.270445</td>
+<td align="right">2.204520</td>
+<td align="right">0.3198510</td>
+<td align="right">0.1065163</td>
+<td align="right">-0.4319890</td>
+<td align="right">-0.3854413</td>
+<td align="right">-0.3562941</td>
+<td align="right">-0.3050567</td>
+<td align="right">0.3139559</td>
+<td align="right">-0.0366231</td>
+<td align="left">3</td>
+</tr>
+<tr class="even">
+<td align="right">6.682779</td>
+<td align="right">1.984699</td>
+<td align="right">0.3195314</td>
+<td align="right">0.0873140</td>
+<td align="right">-0.3372721</td>
+<td align="right">-0.6717775</td>
+<td align="right">0.0549324</td>
+<td align="right">-0.1409529</td>
+<td align="right">0.0335799</td>
+<td align="right">-0.0141216</td>
+<td align="left">3</td>
+</tr>
+<tr class="odd">
+<td align="right">6.398542</td>
+<td align="right">1.886988</td>
+<td align="right">0.0022159</td>
+<td align="right">0.2647923</td>
+<td align="right">-0.7385183</td>
+<td align="right">0.9152193</td>
+<td align="right">0.2601368</td>
+<td align="right">-0.5462037</td>
+<td align="right">-0.2856973</td>
+<td align="right">0.1111252</td>
+<td align="left">3</td>
+</tr>
+<tr class="even">
+<td align="right">5.832219</td>
+<td align="right">1.690245</td>
+<td align="right">0.3000683</td>
+<td align="right">0.0963104</td>
+<td align="right">0.1005551</td>
+<td align="right">0.4797759</td>
+<td align="right">-0.3054812</td>
+<td align="right">-0.5923854</td>
+<td align="right">0.4940588</td>
+<td align="right">-0.1402680</td>
+<td align="left">3</td>
+</tr>
+<tr class="odd">
+<td align="right">5.678807</td>
+<td align="right">1.632746</td>
+<td align="right">0.3317861</td>
+<td align="right">0.0348232</td>
+<td align="right">0.0929290</td>
+<td align="right">0.2208965</td>
+<td align="right">-0.3847197</td>
+<td align="right">-0.3872686</td>
+<td align="right">-0.0300808</td>
+<td align="right">-0.2205450</td>
+<td align="left">3</td>
+</tr>
+<tr class="even">
+<td align="right">5.729480</td>
+<td align="right">1.635180</td>
+<td align="right">0.2944326</td>
+<td align="right">0.0257189</td>
+<td align="right">-0.2458248</td>
+<td align="right">-0.6822917</td>
+<td align="right">-0.1376863</td>
+<td align="right">0.0983200</td>
+<td align="right">0.0084168</td>
+<td align="right">0.2697884</td>
+<td align="left">3</td>
+</tr>
+<tr class="odd">
+<td align="right">5.628063</td>
+<td align="right">1.603470</td>
+<td align="right">0.2315119</td>
+<td align="right">0.0603523</td>
+<td align="right">-0.3652303</td>
+<td align="right">-0.2445703</td>
+<td align="right">-0.3030866</td>
+<td align="right">-0.2024669</td>
+<td align="right">0.0467880</td>
+<td align="right">-0.0394941</td>
+<td align="left">3</td>
+</tr>
+<tr class="even">
+<td align="right">5.864175</td>
+<td align="right">2.381912</td>
+<td align="right">-0.7208230</td>
+<td align="right">0.0115939</td>
+<td align="right">-0.0634805</td>
+<td align="right">0.9042194</td>
+<td align="right">-0.0430465</td>
+<td align="right">-0.1862161</td>
+<td align="right">-0.1528259</td>
+<td align="right">0.4447419</td>
+<td align="left">3</td>
+</tr>
+<tr class="odd">
+<td align="right">6.071753</td>
+<td align="right">3.152601</td>
+<td align="right">-0.2994158</td>
+<td align="right">0.9445040</td>
+<td align="right">-0.3005370</td>
+<td align="right">-0.4465428</td>
+<td align="right">0.1872727</td>
+<td align="right">0.0122893</td>
+<td align="right">0.2508566</td>
+<td align="right">0.0312793</td>
+<td align="left">3</td>
+</tr>
+<tr class="even">
+<td align="right">5.175830</td>
+<td align="right">1.366625</td>
+<td align="right">-0.1679573</td>
+<td align="right">0.1714203</td>
+<td align="right">-1.1839860</td>
+<td align="right">0.4638509</td>
+<td align="right">-0.9132682</td>
+<td align="right">1.0441122</td>
+<td align="right">0.3984801</td>
+<td align="right">-0.0985333</td>
+<td align="left">3</td>
+</tr>
+</tbody>
+</table>
 <pre class="r"><code># Plotando grupos dentro das variáveis criadas
 descricao %&gt;% 
   ggplot(aes(PC1, PC2, color = cluster)) + 
